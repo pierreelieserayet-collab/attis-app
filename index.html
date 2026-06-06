@@ -1,0 +1,86 @@
+import { useState } from 'react'
+import { getLivraisonByCommande } from '../lib/supabase'
+import { StatusBadge, SunIcon, MoonIcon } from '../components/ui'
+
+export default function Suivi() {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState(null)
+  const [searched, setSearched] = useState(false)
+  const [loading, setLoading] = useState(false)
+
+  const handleSearch = async () => {
+    if (!query.trim()) return
+    setLoading(true)
+    try {
+      const data = await getLivraisonByCommande(query.trim())
+      setResults(data)
+      setSearched(true)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const result = results && results[0]
+
+  return (
+    <div className="page page-adv">
+      <div className="page-hero">
+        <h2>Suivi de commande</h2>
+        <p>Saisissez un numéro de commande pour connaître sa date et son statut</p>
+      </div>
+      <div className="card search-card">
+        <div className="card-title">🔍 Rechercher une commande</div>
+        <div className="search-row">
+          <input className="search-input" placeholder="Numéro de commande…"
+            value={query}
+            onChange={e => { setQuery(e.target.value); setSearched(false); setResults(null) }}
+            onKeyDown={e => e.key === 'Enter' && handleSearch()} />
+          <button className="btn-primary" onClick={handleSearch} disabled={loading}>
+            {loading ? '…' : 'Rechercher'}
+          </button>
+        </div>
+      </div>
+
+      {searched && (
+        <div className={`result-card card ${result ? 'result-ok' : 'result-ko'}`} style={{ animation: 'popIn .25s ease' }}>
+          {result ? (
+            <>
+              <div className="result-check">✓</div>
+              <div style={{ flex: 1 }}>
+                <div className="result-cmd">{result.commande}</div>
+                <div className="result-row">
+                  <div className="result-block"><span className="rlabel">Jour</span><span className="rvalue">{result.jour}</span></div>
+                  <div className="result-sep" />
+                  <div className="result-block">
+                    <span className="rlabel">Créneau</span>
+                    <span className={`rvalue pill ${result.creneau === 'Matin' ? 'pill-sun' : 'pill-moon'}`}>
+                      {result.creneau === 'Matin' ? <><SunIcon /> Matin</> : <><MoonIcon /> Après-midi</>}
+                    </span>
+                  </div>
+                  <div className="result-sep" />
+                  <div className="result-block"><span className="rlabel">Statut</span><StatusBadge s={result.statut} /></div>
+                </div>
+                {result.statut === 'livree' && result.signature && (
+                  <div className="sig-preview">
+                    <div className="rlabel" style={{ marginBottom: 6 }}>Signature du client</div>
+                    <img src={result.signature} alt="Signature" style={{ maxWidth: 200, border: '1px solid #d0d8ef', borderRadius: 6, background: '#fff' }} />
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="result-x">✗</div>
+              <div>
+                <p><strong>{query.trim().toUpperCase()}</strong> — commande introuvable.</p>
+                <p className="hint">Vérifiez le numéro ou contactez le responsable des tournées.</p>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}

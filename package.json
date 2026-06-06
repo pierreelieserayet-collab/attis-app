@@ -1,0 +1,99 @@
+import { useState } from 'react'
+import { getLivraisonByCommande, updateLivraison } from '../lib/supabase'
+import { StatusBadge, SunIcon, MoonIcon, SignaturePad } from '../components/ui'
+
+export default function Livreur() {
+  const [query, setQuery] = useState('')
+  const [result, setResult] = useState(null)
+  const [searched, setSearched] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [showSig, setShowSig] = useState(false)
+
+  const handleSearch = async () => {
+    if (!query.trim()) return
+    setLoading(true)
+    try {
+      const data = await getLivraisonByCommande(query.trim())
+      setResult(data[0] || null)
+      setSearched(true)
+    } catch (e) { console.error(e) }
+    finally { setLoading(false) }
+  }
+
+  const handleSignatureSave = async (sig) => {
+    try {
+      const updated = await updateLivraison(result.id, {
+        statut: 'livree',
+        signature: sig,
+        livre_le: new Date().toISOString(),
+      })
+      setResult(updated)
+      setShowSig(false)
+    } catch (e) { console.error(e) }
+  }
+
+  const canDeliver = result && (result.statut === 'planifiee' || result.statut === 'confirmee')
+  const livreLe = result?.livre_le ? new Date(result.livre_le).toLocaleString('fr-FR') : null
+
+  return (
+    <div className="page page-adv">
+      <div className="page-hero" style={{ background: 'linear-gradient(135deg, #1a2d6b 70%, #213580)' }}>
+        <h2>🚚 Espace livreur</h2>
+        <p>Recherchez une commande et faites signer le client à la livraison</p>
+      </div>
+
+      <div className="card search-card">
+        <div className="card-title">Rechercher une commande</div>
+        <div className="search-row">
+          <input className="search-input" placeholder="Numéro de commande…"
+            value={query}
+            onChange={e => { setQuery(e.target.value); setSearched(false); setResult(null) }}
+            onKeyDown={e => e.key === 'Enter' && handleSearch()} />
+          <button className="btn-primary" onClick={handleSearch} disabled={loading}>{loading ? '…' : 'Rechercher'}</button>
+        </div>
+      </div>
+
+      {searched && (
+        <div className={`result-card card ${result ? 'result-ok' : 'result-ko'}`} style={{ animation: 'popIn .25s ease', flexDirection: 'column', gap: 16 }}>
+          {result ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+                <div className="result-check" style={result.statut === 'livree' ? { background: '#f0fdf4', color: '#16a34a' } : {}}>
+                  {result.statut === 'livree' ? '✓' : '📦'}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div className="result-cmd">{result.commande}</div>
+                  <div className="result-row" style={{ flexWrap: 'wrap', gap: 12 }}>
+                    <div className="result-block"><span className="rlabel">Jour</span><span className="rvalue">{result.jour}</span></div>
+                    <div className="result-sep" />
+                    <div className="result-block">
+                      <span className="rlabel">Créneau</span>
+                      <span className={`rvalue pill ${result.creneau === 'Matin' ? 'pill-sun' : 'pill-moon'}`}>
+                        {result.creneau === 'Matin' ? <><SunIcon /> Matin</> : <><MoonIcon /> Après-midi</>}
+                      </span>
+                    </div>
+                    <div className="result-sep" />
+                    <div className="result-block"><span className="rlabel">Statut</span><StatusBadge s={result.statut} /></div>
+                  </div>
+                  {livreLe && <p style={{ fontSize: '0.8rem', color: '#6b7a9e', marginTop: 10 }}>Livré le {livreLe}</p>}
+                </div>
+              </div>
+              {result.statut === 'livree' && result.signature && (
+                <div className="sig-preview">
+                  <div className="rlabel" style={{ marginBottom: 6 }}>Signature du client</div>
+                  <img src={result.signature} alt="Signature" style={{ maxWidth: '100%', maxHeight: 120, border: '1px solid #d0d8ef', borderRadius: 6, background: '#fff' }} />
+                </div>
+              )}
+              {canDeliver && <button className="btn-deliver" onClick={() => setShowSig(true)}>✍️ Faire signer et marquer comme Livrée</button>}
+              {result.statut === 'livree' && <div className="delivered-msg">✅ Cette commande a bien été livrée et signée.</div>}
+            </>
+          ) : (
+            <><div className="result-x">✗</div><div><p><strong>{query.trim().toUpperCase()}</strong> — introuvable.</p><p className="hint">Vérifiez le numéro de commande.</p></div></>
+          )}
+        </div>
+      )}
+
+      {showSig && <SignaturePad commande={result?.commande} onSave={handleSignatureSave} onCancel={() => setShowSig(false)} />}
+    </div>
+  )
+}
